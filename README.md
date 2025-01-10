@@ -18,15 +18,15 @@ O objetivo deste projeto é consolidar conhecimentos sobre Kubernetes, explorand
 <h2>Lista das Atividades:</h2>
 
 1. [Crie um pod](#1-criar-um-pod) chamado **"my-pod"** usando uma imagem simples como **"nginx"** e verifique seu estado com os comandos de monitoramento do Kubernetes.  
-2. [Implante um Deployment](#2-impantando-um-deployment) chamado **"my-deployment"** com três réplicas de uma aplicação baseada na imagem **"httpd"**. Atualize a imagem do Deployment para uma versão mais recente.  
+2. [Implante um Deployment](#2-implantando-um-deployment) chamado **"my-deployment"** com três réplicas de uma aplicação baseada na imagem **"httpd"**. Atualize a imagem do Deployment para uma versão mais recente.  
 3. [Crie um ConfigMap](#3-criar-um-configmap) chamado **"app-config"** com uma variável de configuração personalizada. Monte o ConfigMap em um pod e verifique se o valor foi aplicado corretamente.  
 4. [Crie um Secret](#4-criar-um-secret) chamado **"app-secret"** contendo informações sensíveis. Injete o Secret como uma variável de ambiente em um pod e teste se está acessível.  
 5. [Configure um PersistentVolume](#5-configurando-persistent-volume) de **1Gi** de armazenamento local e vincule-o a um PersistentVolumeClaim. Monte o volume em um pod e salve arquivos para verificar a persistência.  
 6. [Crie um serviço do tipo **ClusterIP**](#6-criar-um-clusterip) para um Deployment chamado **"backend"** e teste a conectividade interna entre pods usando o nome do serviço.  
-7. Implante um Job chamado **"batch-job"** que execute um comando simples e termine. Verifique os logs do Job para confirmar sua execução.  
-8. Crie um **Horizontal Pod Autoscaler** para um Deployment chamado **"hpa-deployment"** e configure-o para escalar com base no uso de CPU. Aumente a carga e observe o escalonamento.  
-9. Crie um serviço do tipo **NodePort** para expor externamente um Deployment chamado **"webapp"**. Acesse o serviço usando o endereço IP do Minikube e a porta atribuída.  
-10. Crie um pod chamado **"restart-pod"** com a política de reinício configurada como **"OnFailure"**. Provoque uma falha no pod e observe seu comportamento.
+7. [Implante um Job](#7-implantando-um-job) chamado **"batch-job"** que execute um comando simples e termine. Verifique os logs do Job para confirmar sua execução.  
+8. [Crie um **Horizontal Pod Autoscaler**](#8-criar-um-horizontal-pod-autoscaler) para um Deployment chamado **"hpa-deployment"** e configure-o para escalar com base no uso de CPU. Aumente a carga e observe o escalonamento.  
+9. [Crie um serviço do tipo **NodePort**](#9-criar-um-nodeport) para expor externamente um Deployment chamado **"webapp"**. Acesse o serviço usando o endereço IP do Minikube e a porta atribuída.  
+10. [Crie um pod chamado **"restart-pod"**](#10-pod-com-politica-de-restart) com a política de reinício configurada como **"OnFailure"**. Provoque uma falha no pod e observe seu comportamento.
 
 <h2>Materias de Apoio:</h2>
 
@@ -69,7 +69,7 @@ kubectl describe pod/my-pod
 - Exemplo:
 ![image](https://github.com/user-attachments/assets/b601b0da-aa2c-4c0d-adb8-969531dc76de)
 
-<h3>2. Impantando um Deployment:</h3>
+<h3>2. Implantando um Deployment:</h3>
 
 2.1 Comando para criar o Deployment:
 
@@ -280,4 +280,214 @@ kubectl exec -it pod-with-pvc -- cat /usr/share/nginx/html/index.html
 ```
 Saída esperada: `Hello, PersistentVolume!`
 
-<h3>6. Criar um ClusterIP</h3>
+<h3>6. Criar um ClusterIP:</h3>
+
+6.1 Criar um arquivo yaml com o nome backend, fica assim `backend.yaml` e coloque o codigo abaixo:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: httpd
+        ports:
+        - containerPort: 80
+```
+
+Comando para aplicar:
+```
+kubectl apply -f backend.yaml
+```
+
+6.2  Criar um arquivo yaml com o nome clusterip-service, fica assim `clusterIP.yaml` e coloque o codigo abaixo:
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+spec:
+  selector:
+    app: backend
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+```
+
+Comando para aplicar:
+```
+kubectl apply -f clusterIP.yaml
+```
+
+6.3 Testar a conectividade interna: Crie um pod temporário para testar:
+```
+kubectl run test-pod --image=busybox --restart=Never --rm -it -- /bin/sh
+```
+
+Dentro do pod, use o nome do serviço para acessar o backend:
+```
+wget -qO- backend-service
+```
+
+- Exemplo:
+![image](https://github.com/user-attachments/assets/60b11bc5-3aa9-4e0b-84ef-e505cde7c42f)
+
+<h3>7. Implantando um Job:</h3>
+
+7.1 Criar um arquivo yaml chamado `batch-job.yaml` e coloque o conteudo abaixo:
+
+```yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: batch-job
+spec:
+  template:
+    spec:
+      containers:
+      - name: job-container
+        image: busybox
+        command: ["sh", "-c", "echo 'Hello, Kubernetes Job!' && sleep 5"]
+      restartPolicy: Never
+  backoffLimit: 4
+```
+
+7.2 Criar o Job:
+```
+kubectl apply -f batch-job.yaml
+```
+
+7.3 Monitorar o progresso do Job:
+
+Para verificar o estado do Job:
+```
+kubectl get jobs
+```
+
+Para ver os pods criados pelo Job:
+```
+kubectl get pods
+```
+
+7.4 Verificar os logs do Job:
+
+O Job criará um pod. Pegue o nome do pod:
+```
+kubectl get pods --selector=job-name=batch-job
+```
+
+Exemplo de saída:
+```
+NAME              READY   STATUS      RESTARTS   AGE
+batch-job-xxxxx   0/1     Completed   0          10s
+```
+
+Substitua `batch-job-xxxxx` pelo nome do pod e veja os logs:
+```
+kubectl logs batch-job-xxxxx
+```
+Saída esperada: `Hello, Kubernetes Job!`
+
+<h3>8. Criar um Horizontal Pod Autoscaler:</h3>
+
+8.1 Criar um Deployment:
+```
+kubectl create deployment hpa-deployment --image=nginx
+```
+
+8.2 Criar o HPA:
+```
+kubectl autoscale deployment hpa-deployment --cpu-percent=85 --min=2 --max=5
+```
+<b>OBS:</b> Isso cria um HPA que escala entre 2 e 5 réplicas se o uso de CPU ultrapassar 85%.
+
+8.3 Simular carga:
+```
+kubectl run load-generator --image=busybox -- sh -c "while true; do wget -q -O- http://hpa-deployment; done"
+```
+
+Observe o HPA escalando:
+```
+kubectl get hpa
+kubectl get pods
+```
+
+<h3>9. Criar um NodePort:</h3>
+
+8.1 Criar um Deployment:
+```
+kubectl create deployment webapp --image=nginx
+```
+
+8.2 Expondo a porta:
+```
+kubectl expose deployment webapp --type=NodePort --port=80
+```
+
+8.3 Acessar via: Minikube IP + NodePort:
+
+Obtendo o NodePort:
+```
+kubectl get svc
+```
+- Exemplo:
+![image](https://github.com/user-attachments/assets/244fa521-34ff-4e92-8f38-c6213b14ae1d)
+
+Obtendo o Minikube IP:
+```
+minikube ip
+```
+- Exemplo:
+![image](https://github.com/user-attachments/assets/fb56b220-0590-426a-b697-8fbda770d24e)
+
+Basta fazer a substituição agora:
+```
+minikube service webapp <Minikube IP>:<NodePort>
+```
+- Exemplo:
+![image](https://github.com/user-attachments/assets/3fdbb8b9-53dd-4f8a-9f54-ca633c79d4a0)
+
+Será aberto automaticamente no seu navegador padrão, algo como isso:
+
+![image](https://github.com/user-attachments/assets/74f523f4-9d3a-4b72-966d-d0d17cd97073)
+
+<h3>10. Pod com politica de restart:</h3>
+
+10.1 Crie um arquivo yaml com o nome restart-pod e inclua o codigo abaixo:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: restart-pod
+spec:
+  restartPolicy: OnFailure
+  containers:
+  - name: busybox
+    image: busybox
+    command: ["false"]
+```
+
+Comando para aplicar:
+```
+kubectl apply -f restart-pod.yaml
+```
+
+10.2 Verifique o estado do pod. O pod será reiniciado automaticamente, já que o comando falha. Veja os eventos:
+```
+kubectl describe pod restart-pod
+```
+
+<h1>Parabéns você conseguiu concluir todas as atividades!!! 🎉</h1>
